@@ -1,0 +1,224 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String         @id
+  name          String
+  email         String         @unique
+  phone         String?
+  cpf           String?
+  role          UserRole       @default(USER)
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  conversations Conversation[]
+  insurances    Insurance[]
+  messages      Message[]
+
+  advisorId     String?
+  advisor       Advisor?       @relation("AdvisorClients", fields: [advisorId], references: [id])
+
+  officeId      String?
+  office        Office?        @relation(fields: [officeId], references: [id])
+
+  @@map("users")
+}
+
+model Office {
+  id        String    @id @default(cuid())
+  name      String
+  address   String?
+  phone     String?
+  email     String?
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  cnpj      String?
+  advisors  Advisor[]
+  users     User[]
+  
+  @@map("offices")
+}
+
+model InsuranceType {
+  id          String      @id @default(cuid())
+  name        String
+  description String?
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  insurances  Insurance[]
+
+  @@map("insurance_types")
+}
+
+model Insurer {
+  id        String    @id @default(cuid())
+  name      String
+  photoUrl  String?
+  isActive  Boolean   @default(true)
+
+  insurances Insurance[]
+  
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Insurance {
+  id              String          @id @default(cuid())
+  userId          String
+  insuranceTypeId String
+  policyNumber    String          @unique
+  insurerName     String
+  contractNumber  String?
+  policyContent   String?
+  startDate       DateTime
+  endDate         DateTime
+  premiumValue    Decimal         @db.Decimal(12, 2)
+  insuredAmount   Decimal         @db.Decimal(17, 2)
+  status          InsuranceStatus @default(ACTIVE)
+  policyPdfUrl    String?
+  policyPdfName   String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  beneficiaries   Beneficiary[]
+  coverages       Coverage[]
+
+  insurerId       String
+  insurer         Insurer         @relation(fields: [insurerId], references: [id])
+
+  insuranceType   InsuranceType   @relation(fields: [insuranceTypeId], references: [id])
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("insurances")
+}
+
+model Coverage {
+  id            String    @id @default(cuid())
+  insuranceId   String
+  name          String
+  description   String?
+  coveredAmount Decimal   @db.Decimal(17, 2)
+  deductible    Decimal?  @db.Decimal(12, 2)
+  waitingPeriod Int?
+  conditions    String?
+  exclusions    String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  insurance     Insurance @relation(fields: [insuranceId], references: [id], onDelete: Cascade)
+
+  @@map("coverages")
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  date        DateTime
+  location    String?
+  imageUrl    String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("events")
+}
+
+model Beneficiary {
+  id           String          @id @default(cuid())
+  insuranceId  String
+  name         String
+  cpf          String
+  relationship BeneficiaryType
+  percentage   Decimal         @db.Decimal(5, 2)
+  birthDate    DateTime?
+  phone        String?
+  email        String?
+  address      String?
+  isActive     Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  insurance    Insurance       @relation(fields: [insuranceId], references: [id], onDelete: Cascade)
+
+  @@map("beneficiaries")
+}
+
+model Conversation {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String?
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  Message[]
+
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  userId         String
+  content        String
+  messageType    MessageType  @default(USER)
+  aiModel        String?
+  aiTokensUsed   Int?
+  attachments    String[]
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+model Advisor {
+  id        String   @id
+  name      String
+  email     String   @unique
+  phone     String?
+  cpf       String?
+  code      String   @unique
+  isActive  Boolean  @default(true)
+  officeId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  avatar    String?
+  offices   Office?  @relation(fields: [officeId], references: [id])
+  clients   User[]   @relation("AdvisorClients")
+}
+
+enum UserRole {
+  ADMIN
+  OFFICE_ADMIN
+  USER
+}
+
+enum InsuranceStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  SUSPENDED
+}
+
+enum BeneficiaryType {
+  SPOUSE
+  CHILD
+  PARENT
+  SIBLING
+  GRANDPARENT
+  GRANDCHILD
+  OTHER
+}
+
+enum MessageType {
+  USER
+  AI
+  SYSTEM
+}
