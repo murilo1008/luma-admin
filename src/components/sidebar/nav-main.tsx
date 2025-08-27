@@ -319,9 +319,9 @@ export function NavMain({
                         className={` ${pathname === subItem.url ? "text" : "text-[#8d8b8b]"}`}
                         isActive={pathname === subItem.url}
                       >
-                        <a href={subItem.url} className="">
+                        <Link href={subItem.url} className="">
                           <span className={`${pathname === subItem.url ? "" : "text-[#8d8b8b]"} `}>{subItem.title}</span>
-                        </a>
+                        </Link>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
                   ))}

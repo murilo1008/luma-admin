@@ -233,20 +233,12 @@ const getNavigationData = (userRole: string | null) => {
         isActive: true,
         items: [
           {
-            title: "Apólices",
-            url: "#",
-          },
-          {
             title: "Seguradoras",
             url: "/insurers",
           },
           {
             title: "Tipos de Seguro",
             url: "/insurances/types",
-          },
-          {
-            title: "Conversas",
-            url: "#",
           },
         ],
       },
