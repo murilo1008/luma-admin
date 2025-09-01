@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronRight, Home, User, UserPlus, Handshake, type LucideIcon, HandPlatter, Briefcase, Building2, Users, BarChart3, Shield, FileText, Settings } from "lucide-react"
+import { ChevronRight, Home, User, UserPlus, Handshake, type LucideIcon, HandPlatter, Briefcase, Building2, Users, BarChart3, Shield, FileText, Settings, Sparkles } from "lucide-react"
 import { usePathname } from "next/navigation"
 
 import {
@@ -88,6 +88,18 @@ export function NavMain({
             <SidebarMenuButton 
               asChild 
               className="rounded-full data-[active=true]:bg-secondary data-[active=true]:text-white hover:bg-secondary/10 data-[active=false]:text-[#8d8b8b]"
+              data-active={pathname === "/chat"}
+            >
+              <Link href="/chat" className="">
+                <Sparkles className={`size-4 ${pathname === "/chat" ? "text-background" : "text-[#8d8b8b]"} `} />
+                <span className={`${pathname === "/chat" ? "text-background" : "text-[#8d8b8b]"} `}>Chat</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton 
+              asChild 
+              className="rounded-full data-[active=true]:bg-secondary data-[active=true]:text-white hover:bg-secondary/10 data-[active=false]:text-[#8d8b8b]"
               data-active={pathname === "/profile"}
             >
               <Link href="/profile" className="">
@@ -130,6 +142,20 @@ export function NavMain({
               <Link href="/advisors" className="">
                 <Handshake className={`size-4 ${pathname.startsWith("/advisors") ? "text-background" : "text-[#8d8b8b]"} `} />
                 <span className={`${pathname.startsWith("/advisors") ? "text-background" : "text-[#8d8b8b]"} `}>Assessores</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+
+          {/* Chat */}
+          <SidebarMenuItem>
+            <SidebarMenuButton 
+              asChild 
+              className="rounded-full data-[active=true]:bg-secondary data-[active=true]:text-white hover:bg-secondary/10 data-[active=false]:text-[#8d8b8b]"
+              data-active={pathname === "/chat"}
+            >
+              <Link href="/chat" className="">
+                <Sparkles className={`size-4 ${pathname === "/chat" ? "text-background" : "text-[#8d8b8b]"} `} />
+                <span className={`${pathname === "/chat" ? "text-background" : "text-[#8d8b8b]"} `}>Chat</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -282,6 +308,18 @@ export function NavMain({
             <Link href="/advisors" className="">
               <Handshake className={`size-4 ${pathname === "/advisors" ? "text-background" : "text-[#8d8b8b]"} `} />
               <span className={`${pathname === "/advisors" ? "text-background" : "text-[#8d8b8b]"} `}>Assessores</span>
+            </Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+        <SidebarMenuItem>
+          <SidebarMenuButton 
+            asChild 
+            className="rounded-full data-[active=true]:bg-secondary data-[active=true]:text-white hover:bg-secondary/10 data-[active=false]:text-[#8d8b8b]"
+            data-active={pathname === "/chat"}
+          >
+            <Link href="/chat" className="">
+              <Sparkles className={`size-4 ${pathname === "/chat" ? "text-background" : "text-[#8d8b8b]"} `} />
+              <span className={`${pathname === "/chat" ? "text-background" : "text-[#8d8b8b]"} `}>Chat</span>
             </Link>
           </SidebarMenuButton>
         </SidebarMenuItem>

@@ -898,4 +898,7 @@ export const usersRouter = createTRPCRouter({
         recent
       }
     }),
+
+  // Upload de apólice removido - usando fetch direto do frontend
+  // uploadInsurance foi movido para fetch direto no componente devido a limitações do tRPC com FormData
 }) 

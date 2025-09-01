@@ -15,7 +15,7 @@ import type {
   SortingState,
   VisibilityState,
 } from "@tanstack/react-table"
-import { ArrowUpDown, ChevronDown, MoreHorizontal, Plus, Search, Filter, UserCheck, Users as UsersIcon, Shield, Eye, Mail, Phone, FileText, Crown, MapPin, Building, Clock, Calendar, CreditCard, DollarSign, CheckCircle, AlertTriangle, X, EyeOff, Check, Pencil, Trash2 } from "lucide-react"
+import { ArrowUpDown, ChevronDown, MoreHorizontal, Plus, Search, Filter, UserCheck, Users as UsersIcon, Shield, Eye, Mail, Phone, FileText, Crown, MapPin, Building, Clock, Calendar, CreditCard, DollarSign, CheckCircle, AlertTriangle, X, EyeOff, Check, Pencil, Trash2, Upload, File, CheckCircle2, XCircle, Loader2 } from "lucide-react"
 import { api } from "@/trpc/react"
 import { toast } from "sonner"
 
@@ -71,6 +71,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Progress } from "@/components/ui/progress"
 
 // Tipos de dados - dados reais do banco
 export type User = {
@@ -443,8 +444,11 @@ function UserActionsCell({ user }: { user: User }) {
   const [viewDialogOpen, setViewDialogOpen] = React.useState(false)
   const [editDialogOpen, setEditDialogOpen] = React.useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
+  const [uploadDialogOpen, setUploadDialogOpen] = React.useState(false)
   
   const utils = api.useUtils()
+
+
 
   const toggleActiveMutation = api.users.update.useMutation({
     onSuccess: (updatedUser: any) => {
@@ -524,6 +528,13 @@ function UserActionsCell({ user }: { user: User }) {
               <DropdownMenuSeparator />
               <DropdownMenuItem 
                 className="cursor-pointer hover:bg-accent"
+                onClick={() => setUploadDialogOpen(true)}
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                Upload de Seguro
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                className="cursor-pointer hover:bg-accent"
                 onClick={() => setEditDialogOpen(true)}
               >
                 <Pencil className="mr-2 h-4 w-4" />
@@ -573,6 +584,17 @@ function UserActionsCell({ user }: { user: User }) {
         user={user}
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
+        onSuccess={() => {
+          utils.users.getAllUsers.invalidate()
+          utils.users.getUserStats.invalidate()
+        }}
+      />
+
+      {/* Dialog de Upload de Seguro */}
+      <InsuranceUploadDialog 
+        user={user}
+        open={uploadDialogOpen}
+        onOpenChange={setUploadDialogOpen}
         onSuccess={() => {
           utils.users.getAllUsers.invalidate()
           utils.users.getUserStats.invalidate()
@@ -1029,6 +1051,520 @@ function UserDetailsDialog({
             </div>
           </>
         )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// Componente para upload de seguros
+function InsuranceUploadDialog({ 
+  user,
+  open, 
+  onOpenChange,
+  onSuccess
+}: { 
+  user: User
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onSuccess: () => void
+}) {
+  const [selectedFile, setSelectedFile] = React.useState<File | null>(null)
+  const [isUploading, setIsUploading] = React.useState(false)
+  const [uploadProgress, setUploadProgress] = React.useState(0)
+  const [uploadStatus, setUploadStatus] = React.useState<'idle' | 'uploading' | 'success' | 'error'>('idle')
+  const [errorMessage, setErrorMessage] = React.useState('')
+  const [debugLogs, setDebugLogs] = React.useState<string[]>([])
+  const fileInputRef = React.useRef<HTMLInputElement>(null)
+
+  // Função para adicionar logs de debug
+  const addDebugLog = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString('pt-BR')
+    const logEntry = `[${timestamp}] ${message}`
+    console.log(logEntry)
+    setDebugLogs(prev => [...prev, logEntry])
+  }
+
+  // Reset state when dialog opens/closes
+  React.useEffect(() => {
+    if (open) {
+      setSelectedFile(null)
+      setIsUploading(false)
+      setUploadProgress(0)
+      setUploadStatus('idle')
+      setErrorMessage('')
+      setDebugLogs([])
+    }
+  }, [open])
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    addDebugLog(`📁 Arquivo selecionado: ${file?.name || 'nenhum'}`)
+    
+    if (!file) {
+      addDebugLog('❌ Nenhum arquivo selecionado')
+      return
+    }
+
+    addDebugLog(`🔍 Validando arquivo: ${file.name}, ${(file.size / 1024 / 1024).toFixed(2)}MB, tipo: ${file.type}`)
+
+    // Validar tipo de arquivo
+    if (file.type !== 'application/pdf') {
+      addDebugLog(`❌ Tipo de arquivo inválido: ${file.type}`)
+      setErrorMessage('Apenas arquivos PDF são aceitos')
+      toast.error('❌ Tipo de arquivo inválido', {
+        description: 'Apenas arquivos PDF são aceitos para upload de apólices.'
+      })
+      return
+    }
+
+    // Validar tamanho (máximo 10MB)
+    const maxSize = 10 * 1024 * 1024 // 10MB
+    if (file.size > maxSize) {
+      addDebugLog(`❌ Arquivo muito grande: ${file.size} bytes (máximo: ${maxSize} bytes)`)
+      setErrorMessage('Arquivo muito grande. Máximo permitido: 10MB')
+      toast.error('❌ Arquivo muito grande', {
+        description: 'O arquivo deve ter no máximo 10MB.'
+      })
+      return
+    }
+
+    addDebugLog('✅ Arquivo válido e selecionado com sucesso')
+    setSelectedFile(file)
+    setErrorMessage('')
+    setUploadStatus('idle')
+  }
+
+  const handleUpload = async () => {
+    if (!selectedFile) return
+
+    setIsUploading(true)
+    setUploadStatus('uploading')
+    setUploadProgress(0)
+
+    let loadingToastId: string | number | undefined
+
+    try {
+      const formData = new FormData()
+      formData.append('policy', selectedFile)
+      formData.append('userId', user.id)
+
+      // 🔍 LOGS DETALHADOS PARA DEBUG
+      addDebugLog('🚀 Iniciando upload...')
+      addDebugLog(`📁 Arquivo: ${selectedFile.name} (${selectedFile.size} bytes, ${selectedFile.type})`)
+      addDebugLog(`👤 User ID: ${user.id}`)
+      addDebugLog('📦 Preparando FormData...')
+
+      try {
+        loadingToastId = toast.loading('📄 Processando apólice...', {
+          description: 'Fazendo upload e extraindo dados da apólice. Isso pode levar alguns segundos.',
+        })
+
+        // Simular progresso de upload
+        const progressInterval = setInterval(() => {
+          setUploadProgress(prev => {
+            if (prev >= 90) {
+              clearInterval(progressInterval)
+              return prev
+            }
+            return prev + Math.random() * 15
+          })
+        }, 500)
+
+        const url = 'https://luma-backend-e8i7.onrender.com/api/insurances/upload'
+        const headers = {
+          'Authorization': 'Bearer admin_token',
+          'x-user-id': user.id
+        }
+        
+        addDebugLog(`🌐 URL: ${url}`)
+        addDebugLog(`🔑 Headers: ${JSON.stringify(headers)}`)
+        addDebugLog('📤 Fazendo requisição...')
+
+        const response = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: formData,
+        })
+
+        clearInterval(progressInterval)
+        setUploadProgress(100)
+
+        addDebugLog(`📨 Response Status: ${response.status}`)
+        addDebugLog(`📨 Response StatusText: ${response.statusText}`)
+        addDebugLog(`📨 Response Headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()))}`)
+
+        // Tentar ler a resposta como texto primeiro para ver o que realmente está vindo
+        const responseText = await response.text()
+        addDebugLog(`📄 Response Text: ${responseText}`)
+
+        if (!response.ok) {
+          let errorData
+          try {
+            errorData = JSON.parse(responseText)
+            addDebugLog(`❌ Error Data (JSON): ${JSON.stringify(errorData)}`)
+          } catch {
+            addDebugLog(`❌ Response não é JSON válido: ${responseText}`)
+            errorData = { message: responseText || 'Erro desconhecido' }
+          }
+          throw new Error(errorData.message || `Erro ${response.status}: ${response.statusText}`)
+        }
+
+        let result
+        try {
+          result = JSON.parse(responseText)
+          addDebugLog(`✅ Success Data: ${JSON.stringify(result)}`)
+        } catch {
+          addDebugLog(`⚠️ Response de sucesso não é JSON válido: ${responseText}`)
+          result = { message: 'Upload realizado com sucesso' }
+        }
+
+        // ✅ GARANTIR que o toast loading seja removido no SUCESSO
+        if (loadingToastId) {
+          toast.dismiss(loadingToastId)
+          addDebugLog('🗑️ Toast loading removido (sucesso)')
+        }
+        
+        setUploadStatus('success')
+        
+        toast.success('🎉 Apólice processada com sucesso!', {
+          description: `A apólice ${result.data?.policyNumber || 'foi'} foi salva e todas as informações foram extraídas automaticamente.`,
+          action: {
+            label: "Ver Detalhes",
+            onClick: () => {
+              onOpenChange(false)
+              // Implementar navegação para detalhes se necessário
+            }
+          }
+        })
+
+        // Aguardar um pouco para mostrar o sucesso antes de fechar
+        setTimeout(() => {
+          onSuccess()
+          onOpenChange(false)
+        }, 2000)
+
+      } catch (innerError: any) {
+        // ✅ GARANTIR que o toast loading seja removido no ERRO
+        if (loadingToastId) {
+          toast.dismiss(loadingToastId)
+          addDebugLog('🗑️ Toast loading removido (erro)')
+        }
+
+        addDebugLog(`💥 Erro completo: ${innerError.toString()}`)
+        addDebugLog(`💥 Error message: ${innerError.message}`)
+        if (innerError.stack) {
+          addDebugLog(`💥 Error stack: ${innerError.stack}`)
+        }
+        
+        setUploadStatus('error')
+        setErrorMessage(innerError.message || 'Erro ao processar apólice')
+        
+        toast.error('❌ Falha no processamento', {
+          description: innerError.message || 'Erro ao processar a apólice. Tente novamente.',
+          action: {
+            label: "Tentar Novamente",
+            onClick: () => {
+              setUploadStatus('idle')
+              setErrorMessage('')
+            }
+          }
+        })
+      }
+
+    } catch (error: any) {
+      // ✅ GARANTIR que o toast loading seja removido em QUALQUER CASO
+      if (loadingToastId) {
+        toast.dismiss(loadingToastId)
+        addDebugLog('🗑️ Toast loading removido (catch externo)')
+      }
+
+      addDebugLog(`💥 Erro externo: ${error.toString()}`)
+      setUploadStatus('error')
+      setErrorMessage(error.message || 'Erro ao processar apólice')
+      
+      toast.error('❌ Falha no processamento', {
+        description: error.message || 'Erro ao processar a apólice. Tente novamente.'
+      })
+    } finally {
+      // ✅ ÚLTIMA GARANTIA - remover toast no finally
+      if (loadingToastId) {
+        toast.dismiss(loadingToastId)
+        addDebugLog('🗑️ Toast loading removido (finally)')
+      }
+      
+      setIsUploading(false)
+      addDebugLog('🏁 Upload finalizado')
+    }
+  }
+
+  const handleRemoveFile = () => {
+    setSelectedFile(null)
+    setUploadStatus('idle')
+    setErrorMessage('')
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const getStatusColor = () => {
+    switch (uploadStatus) {
+      case 'uploading': return 'text-blue-600 dark:text-blue-400'
+      case 'success': return 'text-green-600 dark:text-green-400'
+      case 'error': return 'text-red-600 dark:text-red-400'
+      default: return 'text-gray-600 dark:text-gray-400'
+    }
+  }
+
+  const getStatusIcon = () => {
+    switch (uploadStatus) {
+      case 'uploading': return <Loader2 className="w-4 h-4 animate-spin" />
+      case 'success': return <CheckCircle2 className="w-4 h-4" />
+      case 'error': return <XCircle className="w-4 h-4" />
+      default: return <File className="w-4 h-4" />
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <DialogHeader className="space-y-4 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20 border border-primary/30">
+              <Upload className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <DialogTitle className="text-2xl font-bold text-foreground">
+                Upload de Apólice
+              </DialogTitle>
+              <DialogDescription className="text-muted-foreground">
+                Faça upload da apólice de {user.name} para processamento automático via IA
+              </DialogDescription>
+            </div>
+          </div>
+        </DialogHeader>
+
+        {/* Informações do Usuário */}
+        <div className="p-4 rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-800">
+          <div className="flex items-center gap-3">
+            <Avatar className="h-10 w-10">
+              <AvatarFallback className="bg-primary text-primary-foreground">
+                {getAvatarFallback(user.name)}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <h4 className="font-semibold text-foreground">{user.name}</h4>
+              <p className="text-sm text-muted-foreground">{user.email}</p>
+              <div className="flex items-center gap-2 mt-1">
+                <Badge variant="outline" className="text-xs">ID: {user.id.slice(-8)}</Badge>
+                <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 text-xs">
+                  {user.insurancesCount} apólice{user.insurancesCount !== 1 ? 's' : ''}
+                </Badge>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Upload Area */}
+        <div className="space-y-6">
+          {!selectedFile ? (
+            /* File Drop Zone */
+            <div 
+              className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center hover:border-primary/50 dark:hover:border-primary/50 transition-colors cursor-pointer"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-16 h-16 bg-gradient-to-br from-primary/10 to-secondary/10 rounded-full flex items-center justify-center">
+                  <Upload className="w-8 h-8 text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-foreground mb-2">
+                    Selecione a apólice PDF
+                  </h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Clique aqui ou arraste o arquivo PDF da apólice
+                  </p>
+                  <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <File className="w-3 h-3" />
+                      Apenas PDF
+                    </span>
+                    <span>•</span>
+                    <span>Máximo 10MB</span>
+                    <span>•</span>
+                    <span className="text-green-600 dark:text-green-400">Processamento automático</span>
+                  </div>
+                </div>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf"
+                onChange={handleFileSelect}
+                className="hidden"
+                disabled={isUploading}
+              />
+            </div>
+          ) : (
+            /* Selected File Preview */
+            <div className="space-y-4">
+              <div className="p-4 rounded-lg border border-border bg-card">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-lg bg-gradient-to-br from-red-100 to-red-200 dark:from-red-900/30 dark:to-red-800/30 flex items-center justify-center ${getStatusColor()}`}>
+                      {getStatusIcon()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-medium text-foreground truncate">{selectedFile.name}</h4>
+                      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                        <span>{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</span>
+                        <span>•</span>
+                        <span className="capitalize">{uploadStatus === 'idle' ? 'Pronto' : uploadStatus === 'uploading' ? 'Enviando' : uploadStatus === 'success' ? 'Concluído' : 'Erro'}</span>
+                      </div>
+                    </div>
+                  </div>
+                  {!isUploading && uploadStatus !== 'success' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleRemoveFile}
+                      className="text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+                
+                {/* Progress Bar */}
+                {uploadStatus === 'uploading' && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Processando...</span>
+                      <span>{Math.round(uploadProgress)}%</span>
+                    </div>
+                    <Progress value={uploadProgress} className="h-2" />
+                  </div>
+                )}
+
+                {/* Error Message */}
+                {errorMessage && (
+                  <div className="mt-3 p-3 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                    <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
+                      <XCircle className="w-4 h-4" />
+                      <span className="text-sm font-medium">Erro:</span>
+                    </div>
+                    <p className="text-sm text-red-600 dark:text-red-400 mt-1">{errorMessage}</p>
+                  </div>
+                )}
+
+                {/* Success Message */}
+                {uploadStatus === 'success' && (
+                  <div className="mt-3 p-3 rounded-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                    <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span className="text-sm font-medium">Sucesso!</span>
+                    </div>
+                    <p className="text-sm text-green-600 dark:text-green-400 mt-1">
+                      Apólice processada e dados extraídos automaticamente via IA
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Feature Info */}
+              <div className="p-4 rounded-lg bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200 dark:border-purple-800">
+                <h4 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  Processamento Automático via IA
+                </h4>
+                <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-3 h-3 text-green-600 dark:text-green-400" />
+                    <span>Dados da apólice</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-3 h-3 text-green-600 dark:text-green-400" />
+                    <span>Coberturas detalhadas</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-3 h-3 text-green-600 dark:text-green-400" />
+                    <span>Lista de beneficiários</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-3 h-3 text-green-600 dark:text-green-400" />
+                    <span>Valores e vigências</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Debug Logs */}
+        {debugLogs.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-gray-600 dark:bg-gray-400 rounded-full flex items-center justify-center">
+                <span className="text-xs text-white dark:text-gray-900">🔍</span>
+              </div>
+              <h4 className="font-semibold text-foreground">Logs de Debug</h4>
+            </div>
+            <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 max-h-40 overflow-y-auto">
+              <div className="space-y-1 text-xs font-mono">
+                {debugLogs.map((log, index) => (
+                  <div key={index} className="text-gray-700 dark:text-gray-300 break-all">
+                    {log}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Footer */}
+        <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-border">
+          <Button 
+            type="button" 
+            variant="outline" 
+            onClick={() => onOpenChange(false)}
+            disabled={isUploading}
+            className="flex-1 sm:flex-none"
+          >
+            {uploadStatus === 'success' ? 'Fechar' : 'Cancelar'}
+          </Button>
+          
+          {selectedFile && uploadStatus !== 'success' && (
+            <Button 
+              onClick={handleUpload}
+              disabled={isUploading || !selectedFile}
+              className="bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-white flex-1 sm:flex-none"
+            >
+              {isUploading ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Processando...
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Upload className="w-4 h-4" />
+                  Processar Apólice
+                </div>
+              )}
+            </Button>
+          )}
+
+          {!selectedFile && (
+            <Button 
+              onClick={() => fileInputRef.current?.click()}
+              className="bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-white flex-1 sm:flex-none"
+            >
+              <div className="flex items-center gap-2">
+                <File className="w-4 h-4" />
+                Selecionar PDF
+              </div>
+            </Button>
+          )}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
