@@ -435,8 +435,9 @@ export const insurancesRouter = createTRPCRouter({
         activePolicies,
         expiredPolicies,
         cancelledPolicies,
-        totalPremiumValue: Number(totalPremiumValue._sum.premiumValue || 0),
-        totalInsuredAmount: Number(totalInsuredAmount._sum.insuredAmount || 0)
+        // Dividir por 100 para converter centavos para reais
+        totalPremiumValue: Number(totalPremiumValue._sum.premiumValue || 0) / 100,
+        totalInsuredAmount: Number(totalInsuredAmount._sum.insuredAmount || 0) / 100
       }
     }),
 })

@@ -638,12 +638,12 @@ function UserActionsCell({ user }: { user: User }) {
   )
 }
 
-// Função para formatar valores monetários
+// Função para formatar valores monetários (converte de centavos para reais)
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL'
-  }).format(value)
+  }).format(value / 100) // Dividir por 100 para converter centavos para reais
 }
 
 // Função para obter status color

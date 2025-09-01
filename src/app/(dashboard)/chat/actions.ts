@@ -126,8 +126,9 @@ export async function getUserPoliciesAction(userId: string): Promise<UserPolicy[
     return insurances.map((insurance: any) => {
       const startDate = insurance.startDate.toLocaleDateString('pt-BR')
       const endDate = insurance.endDate.toLocaleDateString('pt-BR')
-      const premiumValue = insurance.premiumValue.toNumber().toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-      const insuredAmount = insurance.insuredAmount.toNumber().toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+      // Dividir por 100 para converter centavos para reais
+      const premiumValue = (insurance.premiumValue.toNumber() / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+      const insuredAmount = (insurance.insuredAmount.toNumber() / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
       return {
         policyNumber: insurance.policyNumber,
@@ -142,7 +143,8 @@ export async function getUserPoliciesAction(userId: string): Promise<UserPolicy[
                insurance.status === 'CANCELLED' ? 'Cancelada' : 'Suspensa',
         coverages: insurance.coverages.map((coverage: any) => ({
           name: coverage.name,
-          coveredAmount: coverage.coveredAmount.toNumber().toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+          // Dividir por 100 para converter centavos para reais
+          coveredAmount: (coverage.coveredAmount.toNumber() / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
           description: coverage.description || undefined
         })),
         beneficiaries: insurance.beneficiaries.map((beneficiary: any) => ({
